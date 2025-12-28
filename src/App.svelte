@@ -1,4 +1,6 @@
 <script>
+  // @ts-nocheck
+
   let token = "";
   let user = null;
   let plate = "";
@@ -14,9 +16,20 @@
 
   $: price = (duration / 30) * 1.5;
 
+  /* =====================
+     LOGIN (SUPERQI AUTH)
+     ===================== */
   async function login() {
+    if (typeof my === "undefined") {
+      alert("❌ This MiniApp must be opened inside SuperQi");
+      return;
+    }
+
+    if (loading) return;
     loading = true;
+
     try {
+      // 1. Get Auth Code
       const authCode = await new Promise((resolve, reject) => {
         my.getAuthCode({
           scopes: ["auth_base", "USER_ID"],
@@ -25,34 +38,49 @@
         });
       });
 
+      // 2. Send to Backend (EXACT API)
       const res = await fetch(
         "https://its.mouamle.space/api/auth-with-superQi",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: authCode }),
-        },
+        }
       );
 
       const data = await res.json();
 
-      if (data.token) {
-        token = data.token;
-        user = data.record;
-        my.alert({ content: "Login successful" });
-      } else {
-        my.alert({ content: "Login failed" });
+      if (!data.token) {
+        throw new Error("No token returned");
       }
+
+      token = data.token;
+      user = data.record;
+
+      my.alert({ content: "✅ Login successful" });
     } catch (err) {
       console.error(err);
-      my.alert({ content: "Auth error" });
+      my.alert({ content: "❌ Login failed" });
     } finally {
       loading = false;
     }
   }
 
+  /* =====================
+     PAYMENT
+     ===================== */
   async function pay() {
-    if (!token || loading) return;
+    if (!token) {
+      my.alert({ content: "⚠️ Please login first" });
+      return;
+    }
+
+    if (!plate) {
+      my.alert({ content: "⚠️ Enter plate number" });
+      return;
+    }
+
+    if (loading) return;
     loading = true;
 
     try {
@@ -60,29 +88,28 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: token,
+          Authorization: token, // ❗ EXACT like trainer
         },
       });
 
       const data = await res.json();
 
-      if (data.url) {
-        my.tradePay({
-          paymentUrl: data.url,
-          success: () => {
-            my.alert({ content: "Payment successful" });
-          },
-          fail: (err) => {
-            console.error(err);
-            my.alert({ content: "Payment failed" });
-          },
-        });
-      } else {
-        my.alert({ content: "No payment URL returned" });
+      if (!data.url) {
+        throw new Error("No payment URL");
       }
+
+      my.tradePay({
+        paymentUrl: data.url,
+        success: () => {
+          my.alert({ content: "✅ Payment successful" });
+        },
+        fail: () => {
+          my.alert({ content: "❌ Payment failed" });
+        },
+      });
     } catch (err) {
       console.error(err);
-      my.alert({ content: "Payment error" });
+      my.alert({ content: "❌ Payment error" });
     } finally {
       loading = false;
     }
@@ -95,29 +122,30 @@
     <p>Smart Parking Mini App</p>
   </header>
 
-  <section class="card auth-section">
+  <!-- AUTH CARD -->
+  <section class="card">
     {#if !token}
       <button class="btn-primary" on:click={login} disabled={loading}>
         {loading ? "Connecting..." : "Login with SuperQi"}
       </button>
     {:else}
       <div class="user-info">
-        <span class="label">Logged in as</span>
-        <span class="user-id">ID: {user?.id || "Unknown"}</span>
+        <span>Logged in</span>
+        <strong>ID: {user?.id || "N/A"}</strong>
       </div>
     {/if}
   </section>
 
-  <section class="card parking-section">
+  <!-- PARKING CARD -->
+  <section class="card">
     <h2>Book Parking</h2>
 
     <div class="input-group">
-      <label for="plate">Plate Number</label>
+      <label>Plate Number</label>
       <input
-        id="plate"
         type="text"
-        bind:value={plate}
         placeholder="ABC-1234"
+        bind:value={plate}
         class="input-field"
       />
     </div>
@@ -125,33 +153,29 @@
     <div class="input-group">
       <label>Duration</label>
       <div class="duration-options">
-        {#each durations as opt}
+        {#each durations as d}
           <button
             class="duration-btn"
-            class:active={duration === opt.value}
-            on:click={() => (duration = opt.value)}
+            class:active={duration === d.value}
+            on:click={() => (duration = d.value)}
           >
-            {opt.label}
+            {d.label}
           </button>
         {/each}
       </div>
     </div>
 
-    <div class="price-display">
+    <div class="price">
       <span>Total</span>
-      <span class="amount">${price.toFixed(2)}</span>
+      <strong>${price.toFixed(2)}</strong>
     </div>
 
     <button
       class="btn-pay"
-      disabled={!token || !plate || loading}
       on:click={pay}
+      disabled={!token || loading}
     >
-      {#if !token}
-        Login to Pay
-      {:else}
-        {loading ? "Processing..." : "Pay & Park"}
-      {/if}
+      {loading ? "Processing..." : "Pay & Park"}
     </button>
   </section>
 </main>
@@ -159,71 +183,67 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      Helvetica, Arial, sans-serif;
-    background-color: #f5f7fa;
-    color: #333;
+    font-family: system-ui, sans-serif;
+    background: #f5f7fa;
   }
 
   main {
     max-width: 480px;
-    margin: 0 auto;
+    margin: auto;
     padding: 20px;
   }
 
   header {
-    margin-bottom: 24px;
     text-align: center;
+    margin-bottom: 20px;
   }
 
   h1 {
     margin: 0;
     font-size: 28px;
-    font-weight: 700;
   }
 
   p {
-    margin: 4px 0 0;
     color: #666;
     font-size: 14px;
   }
 
   .card {
     background: white;
-    border-radius: 16px;
     padding: 20px;
+    border-radius: 16px;
     margin-bottom: 20px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
   .btn-primary {
     width: 100%;
+    padding: 14px;
     background: #007bff;
     color: white;
     border: none;
-    padding: 14px;
     border-radius: 12px;
-    font-weight: 600;
     font-size: 16px;
+    font-weight: 600;
   }
 
   .user-info {
     display: flex;
     justify-content: space-between;
-    background: #f8f9fa;
+    background: #f0f2f5;
     padding: 12px;
     border-radius: 8px;
   }
 
   .input-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .input-field {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
     border-radius: 8px;
+    border: 1px solid #ddd;
   }
 
   .duration-options {
@@ -234,9 +254,9 @@
   .duration-btn {
     flex: 1;
     padding: 10px;
-    background: #f0f2f5;
     border-radius: 8px;
     border: none;
+    background: #f0f2f5;
   }
 
   .duration-btn.active {
@@ -244,25 +264,22 @@
     color: #007bff;
   }
 
-  .price-display {
+  .price {
     display: flex;
     justify-content: space-between;
-    margin: 24px 0;
-  }
-
-  .amount {
-    font-size: 24px;
-    font-weight: 700;
+    margin: 20px 0;
+    font-size: 18px;
   }
 
   .btn-pay {
     width: 100%;
+    padding: 16px;
     background: #10b981;
     color: white;
     border: none;
-    padding: 16px;
     border-radius: 12px;
     font-size: 18px;
+    font-weight: 600;
   }
 
   .btn-pay:disabled {
