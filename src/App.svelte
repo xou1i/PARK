@@ -2,7 +2,7 @@
   let token = "";
   let user = null;
   let plate = "";
-  let duration = 60; // default 1 hour
+  let duration = 60;
   let loading = false;
   let price = 0;
 
@@ -12,26 +12,19 @@
     { label: "2 Hours", value: 120 },
   ];
 
-  $: price = (duration / 30) * 1.5; // $1.50 per 30 mins
+  $: price = (duration / 30) * 1.5;
 
   async function login() {
     loading = true;
     try {
-      // 1. Get Auth Code
       const authCode = await new Promise((resolve, reject) => {
-        if (typeof my !== "undefined") {
-          my.getAuthCode({
-            scopes: ["auth_base", "USER_ID"],
-            success: (res) => resolve(res.authCode),
-            fail: (err) => reject(err),
-          });
-        } else {
-          console.warn("SuperQi env not found, mocking auth");
-          setTimeout(() => resolve("mock-auth-code"), 500);
-        }
+        my.getAuthCode({
+          scopes: ["auth_base", "USER_ID"],
+          success: (res) => resolve(res.authCode),
+          fail: (err) => reject(err),
+        });
       });
 
-      // 2. Backend Auth
       const res = await fetch(
         "https://its.mouamle.space/api/auth-with-superQi",
         {
@@ -42,14 +35,17 @@
       );
 
       const data = await res.json();
+
       if (data.token) {
         token = data.token;
         user = data.record;
+        my.alert({ content: "Login successful" });
       } else {
-        console.error("Auth failed", data);
+        my.alert({ content: "Login failed" });
       }
     } catch (err) {
-      console.error("Login error", err);
+      console.error(err);
+      my.alert({ content: "Auth error" });
     } finally {
       loading = false;
     }
@@ -58,8 +54,8 @@
   async function pay() {
     if (!token || loading) return;
     loading = true;
+
     try {
-      // 3. Payment Request
       const res = await fetch("https://its.mouamle.space/api/payment", {
         method: "POST",
         headers: {
@@ -70,19 +66,23 @@
 
       const data = await res.json();
 
-      // 4. Open Payment Window
       if (data.url) {
-        if (typeof my !== "undefined") {
-          my.tradePay({
-            paymentUrl: data.url,
-          });
-        } else {
-          console.log("Opening mock payment:", data.url);
-          alert(`Opening Payment: ${data.url}`);
-        }
+        my.tradePay({
+          paymentUrl: data.url,
+          success: () => {
+            my.alert({ content: "Payment successful" });
+          },
+          fail: (err) => {
+            console.error(err);
+            my.alert({ content: "Payment failed" });
+          },
+        });
+      } else {
+        my.alert({ content: "No payment URL returned" });
       }
     } catch (err) {
-      console.error("Payment error", err);
+      console.error(err);
+      my.alert({ content: "Payment error" });
     } finally {
       loading = false;
     }
@@ -123,13 +123,13 @@
     </div>
 
     <div class="input-group">
-      <label for="duration">Duration</label>
+      <label>Duration</label>
       <div class="duration-options">
         {#each durations as opt}
           <button
+            class="duration-btn"
             class:active={duration === opt.value}
             on:click={() => (duration = opt.value)}
-            class="duration-btn"
           >
             {opt.label}
           </button>
@@ -179,7 +179,6 @@
   h1 {
     margin: 0;
     font-size: 28px;
-    color: #1a1a1a;
     font-weight: 700;
   }
 
@@ -197,12 +196,6 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
-  h2 {
-    margin: 0 0 16px;
-    font-size: 18px;
-    font-weight: 600;
-  }
-
   .btn-primary {
     width: 100%;
     background: #007bff;
@@ -212,43 +205,18 @@
     border-radius: 12px;
     font-weight: 600;
     font-size: 16px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .btn-primary:active {
-    background: #0056b3;
   }
 
   .user-info {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     background: #f8f9fa;
     padding: 12px;
     border-radius: 8px;
   }
 
-  .label {
-    color: #666;
-    font-size: 14px;
-  }
-
-  .user-id {
-    font-weight: 600;
-    color: #333;
-  }
-
   .input-group {
     margin-bottom: 20px;
-  }
-
-  label {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #555;
   }
 
   .input-field {
@@ -256,14 +224,6 @@
     padding: 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
-    font-size: 16px;
-    box-sizing: border-box;
-    transition: border-color 0.2s;
-  }
-
-  .input-field:focus {
-    border-color: #007bff;
-    outline: none;
   }
 
   .duration-options {
@@ -275,38 +235,24 @@
     flex: 1;
     padding: 10px;
     background: #f0f2f5;
-    border: 2px solid transparent;
     border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    color: #555;
+    border: none;
   }
 
   .duration-btn.active {
     background: #e6f0ff;
-    border-color: #007bff;
     color: #007bff;
   }
 
   .price-display {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     margin: 24px 0;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
   }
 
-  .price-display span {
-    font-size: 16px;
-    color: #666;
-  }
-
-  .price-display .amount {
+  .amount {
     font-size: 24px;
     font-weight: 700;
-    color: #1a1a1a;
   }
 
   .btn-pay {
@@ -316,17 +262,10 @@
     border: none;
     padding: 16px;
     border-radius: 12px;
-    font-weight: 600;
     font-size: 18px;
-    cursor: pointer;
   }
 
   .btn-pay:disabled {
     background: #ccc;
-    cursor: not-allowed;
-  }
-
-  .btn-pay:not(:disabled):active {
-    background: #059669;
   }
 </style>
