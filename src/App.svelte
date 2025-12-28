@@ -16,20 +16,12 @@
 
   $: price = (duration / 30) * 1.5;
 
-  /* =====================
-     LOGIN (SUPERQI AUTH)
-     ===================== */
+  /* ========= LOGIN ========= */
   async function login() {
-    if (typeof my === "undefined") {
-      alert("❌ This MiniApp must be opened inside SuperQi");
-      return;
-    }
-
     if (loading) return;
     loading = true;
 
     try {
-      // 1. Get Auth Code
       const authCode = await new Promise((resolve, reject) => {
         my.getAuthCode({
           scopes: ["auth_base", "USER_ID"],
@@ -38,7 +30,6 @@
         });
       });
 
-      // 2. Send to Backend (EXACT API)
       const res = await fetch(
         "https://its.mouamle.space/api/auth-with-superQi",
         {
@@ -50,9 +41,7 @@
 
       const data = await res.json();
 
-      if (!data.token) {
-        throw new Error("No token returned");
-      }
+      if (!data.token) throw new Error("No token");
 
       token = data.token;
       user = data.record;
@@ -66,9 +55,7 @@
     }
   }
 
-  /* =====================
-     PAYMENT
-     ===================== */
+  /* ========= PAYMENT ========= */
   async function pay() {
     if (!token) {
       my.alert({ content: "⚠️ Please login first" });
@@ -88,15 +75,13 @@
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: token, // ❗ EXACT like trainer
+          Authorization: token,
         },
       });
 
       const data = await res.json();
 
-      if (!data.url) {
-        throw new Error("No payment URL");
-      }
+      if (!data.url) throw new Error("No payment URL");
 
       my.tradePay({
         paymentUrl: data.url,
@@ -122,7 +107,6 @@
     <p>Smart Parking Mini App</p>
   </header>
 
-  <!-- AUTH CARD -->
   <section class="card">
     {#if !token}
       <button class="btn-primary" on:click={login} disabled={loading}>
@@ -136,7 +120,6 @@
     {/if}
   </section>
 
-  <!-- PARKING CARD -->
   <section class="card">
     <h2>Book Parking</h2>
 
@@ -198,16 +181,6 @@
     margin-bottom: 20px;
   }
 
-  h1 {
-    margin: 0;
-    font-size: 28px;
-  }
-
-  p {
-    color: #666;
-    font-size: 14px;
-  }
-
   .card {
     background: white;
     padding: 20px;
@@ -216,15 +189,28 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
-  .btn-primary {
+  .btn-primary,
+  .btn-pay {
     width: 100%;
     padding: 14px;
-    background: #007bff;
-    color: white;
     border: none;
     border-radius: 12px;
     font-size: 16px;
     font-weight: 600;
+  }
+
+  .btn-primary {
+    background: #007bff;
+    color: white;
+  }
+
+  .btn-pay {
+    background: #10b981;
+    color: white;
+  }
+
+  .btn-pay:disabled {
+    background: #ccc;
   }
 
   .user-info {
@@ -269,20 +255,5 @@
     justify-content: space-between;
     margin: 20px 0;
     font-size: 18px;
-  }
-
-  .btn-pay {
-    width: 100%;
-    padding: 16px;
-    background: #10b981;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  .btn-pay:disabled {
-    background: #ccc;
   }
 </style>
