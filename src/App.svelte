@@ -1,12 +1,13 @@
 <script>
   // @ts-nocheck
 
+  let authCode = "";
   let token = "";
   let user = null;
+
   let plate = "";
   let duration = 60;
   let loading = false;
-  let price = 0;
 
   const durations = [
     { label: "30 Mins", value: 30 },
@@ -14,90 +15,82 @@
     { label: "2 Hours", value: 120 },
   ];
 
-  $: price = (duration / 30) * 1.5;
-
-  /* ========= LOGIN ========= */
-  async function login() {
-    if (loading) return;
+  function login() {
     loading = true;
 
-    try {
-      const authCode = await new Promise((resolve, reject) => {
-        my.getAuthCode({
-          scopes: ["auth_base", "USER_ID"],
-          success: (res) => resolve(res.authCode),
-          fail: (err) => reject(err),
-        });
-      });
+    my.getAuthCode({
+      scopes: ["auth_base", "USER_ID"],
+      success: (res) => {
+        authCode = res.authCode;
 
-      const res = await fetch(
-        "https://its.mouamle.space/api/auth-with-superQi",
-        {
+        fetch("https://its.mouamle.space/api/auth-with-superQi", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: authCode }),
-        }
-      );
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: authCode, // نفس مشروع المدرّب
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            token = data.token;
+            user = data.record;
 
-      const data = await res.json();
-
-      if (!data.token) throw new Error("No token");
-
-      token = data.token;
-      user = data.record;
-
-      my.alert({ content: "✅ Login successful" });
-    } catch (err) {
-      console.error(err);
-      my.alert({ content: "❌ Login failed" });
-    } finally {
-      loading = false;
-    }
+            my.alert({
+              content: "Login successful",
+            });
+          })
+          .catch((err) => {
+            my.alert({
+              content: "Login failed",
+            });
+            console.error(err);
+          })
+          .finally(() => {
+            loading = false;
+          });
+      },
+      fail: (err) => {
+        loading = false;
+        my.alert({
+          content: "Auth failed",
+        });
+        console.error(err);
+      },
+    });
   }
 
-  /* ========= PAYMENT ========= */
-  async function pay() {
+  function pay() {
     if (!token) {
-      my.alert({ content: "⚠️ Please login first" });
+      my.alert({ content: "Please login first" });
       return;
     }
 
-    if (!plate) {
-      my.alert({ content: "⚠️ Enter plate number" });
-      return;
-    }
-
-    if (loading) return;
-    loading = true;
-
-    try {
-      const res = await fetch("https://its.mouamle.space/api/payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
+    fetch("https://its.mouamle.space/api/payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token, // نفس المدرّب
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        my.tradePay({
+          paymentUrl: data.url, // نفس المدرّب
+          success: () => {
+            my.alert({
+              content: "Payment successful",
+            });
+          },
+        });
+      })
+      .catch((err) => {
+        my.alert({
+          content: "Payment failed",
+        });
+        console.error(err);
       });
-
-      const data = await res.json();
-
-      if (!data.url) throw new Error("No payment URL");
-
-      my.tradePay({
-        paymentUrl: data.url,
-        success: () => {
-          my.alert({ content: "✅ Payment successful" });
-        },
-        fail: () => {
-          my.alert({ content: "❌ Payment failed" });
-        },
-      });
-    } catch (err) {
-      console.error(err);
-      my.alert({ content: "❌ Payment error" });
-    } finally {
-      loading = false;
-    }
   }
 </script>
 
@@ -115,7 +108,7 @@
     {:else}
       <div class="user-info">
         <span>Logged in</span>
-        <strong>ID: {user?.id || "N/A"}</strong>
+        <strong>ID: {user?.id}</strong>
       </div>
     {/if}
   </section>
@@ -123,48 +116,29 @@
   <section class="card">
     <h2>Book Parking</h2>
 
-    <div class="input-group">
-      <label>Plate Number</label>
-      <input
-        type="text"
-        placeholder="ABC-1234"
-        bind:value={plate}
-        class="input-field"
-      />
+    <input
+      type="text"
+      placeholder="Plate Number"
+      bind:value={plate}
+      class="input"
+    />
+
+    <div class="durations">
+      {#each durations as d}
+        <button on:click={() => (duration = d.value)}>
+          {d.label}
+        </button>
+      {/each}
     </div>
 
-    <div class="input-group">
-      <label>Duration</label>
-      <div class="duration-options">
-        {#each durations as d}
-          <button
-            class="duration-btn"
-            class:active={duration === d.value}
-            on:click={() => (duration = d.value)}
-          >
-            {d.label}
-          </button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="price">
-      <span>Total</span>
-      <strong>${price.toFixed(2)}</strong>
-    </div>
-
-    <button
-      class="btn-pay"
-      on:click={pay}
-      disabled={!token || loading}
-    >
-      {loading ? "Processing..." : "Pay & Park"}
+    <button class="btn-pay" on:click={pay}>
+      Pay & Park
     </button>
   </section>
 </main>
 
 <style>
-  :global(body) {
+  body {
     margin: 0;
     font-family: system-ui, sans-serif;
     background: #f5f7fa;
@@ -186,17 +160,16 @@
     padding: 20px;
     border-radius: 16px;
     margin-bottom: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
   .btn-primary,
   .btn-pay {
     width: 100%;
     padding: 14px;
-    border: none;
     border-radius: 12px;
+    border: none;
     font-size: 16px;
-    font-weight: 600;
+    margin-top: 10px;
   }
 
   .btn-primary {
@@ -209,51 +182,18 @@
     color: white;
   }
 
-  .btn-pay:disabled {
-    background: #ccc;
-  }
-
   .user-info {
     display: flex;
     justify-content: space-between;
-    background: #f0f2f5;
-    padding: 12px;
-    border-radius: 8px;
   }
 
-  .input-group {
-    margin-bottom: 16px;
-  }
-
-  .input-field {
+  .input {
     width: 100%;
     padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
+    margin-bottom: 10px;
   }
 
-  .duration-options {
-    display: flex;
-    gap: 8px;
-  }
-
-  .duration-btn {
-    flex: 1;
-    padding: 10px;
-    border-radius: 8px;
-    border: none;
-    background: #f0f2f5;
-  }
-
-  .duration-btn.active {
-    background: #e6f0ff;
-    color: #007bff;
-  }
-
-  .price {
-    display: flex;
-    justify-content: space-between;
-    margin: 20px 0;
-    font-size: 18px;
+  .durations button {
+    margin-right: 5px;
   }
 </style>
