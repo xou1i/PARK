@@ -61,6 +61,58 @@
     });
   }
 
+  function Scan() {
+    if (typeof my === "undefined") {
+      console.error(
+        "my object is not available. Make sure the bridge is loaded.",
+      );
+      return;
+    }
+
+    if (typeof my.scan !== "function") {
+      if (typeof my.canIUse === "function" && !my.canIUse("scan")) {
+        console.error("my.scan is not available, client version too low");
+      }
+      return;
+    }
+
+    my.scan({
+      type: "qr",
+      hideAlbum: false,
+      success: (res) => {
+        console.log("scan success:", res);
+
+        // UI Reaction
+        const paySection = document.getElementById("pay-section");
+        paySection.classList.remove("hidden");
+        paySection.classList.add("visible");
+
+        // Optional: Scroll to payment
+        paySection.scrollIntoView({ behavior: "smooth" });
+      },
+      fail: (error) => {
+        console.error("scan fail:", error);
+        let errorMessage = "Scan failed";
+        if (error.error) {
+          switch (error.error) {
+            case 10:
+              errorMessage = "User cancelled scanning";
+              break;
+            case 11:
+              errorMessage = "Operation failed";
+              break;
+            default:
+              errorMessage = error.errorMessage || "Unknown error occurred";
+          }
+        }
+        console.error("scan fail:", errorMessage);
+      },
+      complete: (res) => {
+        console.log("scan complete:", res);
+      },
+    });
+  }
+
   function pay() {
     if (!token) {
       my.alert({ content: "Please login first" });
@@ -113,37 +165,54 @@
     {/if}
   </section>
 
-  <section class="card booking-card">
-    <h2>Book Parking</h2>
-
-    <input
-      type="text"
-      placeholder="Plate Number"
-      bind:value={plate}
-      class="input"
-    />
-
-    <div class="durations">
-      {#each durations as d}
-        <button
-          class:selected={duration === d.value}
-          on:click={() => (duration = d.value)}
-        >
-          {d.label}
+  {#if token}
+    <section id="scan-section" class="card">
+      <div class="scan-wrapper">
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <div class="scan-frame" on:click={Scan} style="cursor: pointer;">
+          <div class="scan-line"></div>
+        </div>
+        <button id="QR" class="btn-primary" on:click={Scan}>
+          Scan QR Code
         </button>
-      {/each}
-    </div>
+      </div>
+    </section>
 
-    <button class="btn-pay" on:click={pay}>
-      Pay & Park
-    </button>
-  </section>
+    <section id="pay-section" class="card booking-card hidden">
+      <h2>Book Parking</h2>
+
+      <input
+        type="text"
+        placeholder="Plate Number"
+        bind:value={plate}
+        class="input"
+      />
+
+      <div class="durations">
+        {#each durations as d}
+          <button
+            class:selected={duration === d.value}
+            on:click={() => (duration = d.value)}
+          >
+            {d.label}
+          </button>
+        {/each}
+      </div>
+
+      <button class="btn-pay" on:click={pay}> Pay & Park </button>
+    </section>
+  {/if}
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      "Segoe UI",
+      system-ui,
+      -apple-system,
+      sans-serif;
     background: #f5f7fb;
     color: #0b1b3a;
   }
@@ -204,8 +273,16 @@
     margin-top: 10px;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
-    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    transition:
+      transform 150ms ease,
+      box-shadow 150ms ease,
+      background 150ms ease;
+    font-family:
+      "Inter",
+      "Segoe UI",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   .btn-primary {
@@ -244,31 +321,34 @@
   }
 
   .input {
-  width: 100%;
-  box-sizing: border-box; /* ⭐ الحل الأساسي */
-  padding: 13px 14px;
-  border-radius: 12px;
-  border: 1px solid #d7deeb;
-  background: #f8fafc;
-  font-size: 15px;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    width: 100%;
+    box-sizing: border-box; /* ⭐ الحل الأساسي */
+    padding: 13px 14px;
+    border-radius: 12px;
+    border: 1px solid #d7deeb;
+    background: #f8fafc;
+    font-size: 15px;
+    font-family:
+      "Inter",
+      "Segoe UI",
+      system-ui,
+      -apple-system,
+      sans-serif;
 
-  outline: none;
-  box-shadow: none;
-}
+    outline: none;
+    box-shadow: none;
+  }
 
-.input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
-  background: #ffffff;
-}
+  .input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+    background: #ffffff;
+  }
 
-
-/* نحذف أي focus افتراضي من المتصفح */
-.input:focus-visible {
-  outline: none;
-}
-
+  /* نحذف أي focus افتراضي من المتصفح */
+  .input:focus-visible {
+    outline: none;
+  }
 
   .durations {
     display: flex;
@@ -289,7 +369,12 @@
     color: #0b1b3a;
     cursor: pointer;
     transition: all 150ms ease;
-    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      "Segoe UI",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   .durations button:hover {
@@ -302,5 +387,63 @@
     color: white;
     border-color: #1d4ed8;
     box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+  }
+
+  /* Scan Section Styles */
+  .hidden {
+    display: none !important;
+  }
+
+  .visible {
+    display: flex !important;
+  }
+
+  .scan-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .scan-frame {
+    width: 200px;
+    height: 200px;
+    border: 2px solid #e3e8ef; /* var(--card-border) */
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    background: #f8fafc; /* Adapted Light Theme Color */
+    box-shadow: inset 0 0 20px rgba(37, 99, 235, 0.05); /* Adapted Shadow */
+  }
+
+  .scan-line {
+    width: 100%;
+    height: 2px;
+    background-color: #2563eb; /* var(--accent-blue) */
+    box-shadow: 0 0 8px #2563eb; /* Stronger glow */
+    position: absolute;
+    top: 0;
+    animation: scan 2.5s infinite linear;
+  }
+
+  @keyframes scan {
+    0% {
+      top: 0;
+      opacity: 0;
+    }
+
+    15% {
+      opacity: 1;
+    }
+
+    85% {
+      opacity: 1;
+    }
+
+    100% {
+      top: 100%;
+      opacity: 0;
+    }
   }
 </style>
